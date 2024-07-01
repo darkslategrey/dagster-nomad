@@ -1,0 +1,9 @@
+
+
+docker-build:
+    docker build --platform="linux/amd64" -t gfaru/rs-dagster:1.7.12-0.23.12-1 -f Dockerfile_dagster .
+    docker build --platform="linux/amd64" -t gfaru/dagster-app:1.0.0 -f Dockerfile_user_code .
+
+docker-push:
+    docker push gfaru/rs-dagster:1.7.12-0.23.12-1
+    docker push gfaru/dagster-app:1.0.0

@@ -1,0 +1,76 @@
+version: "3.7"
+
+services:
+  dag_3_workspace:
+    build:
+      context: .
+      dockerfile: ./Dockerfile_user_code
+    container_name: dag_3_workspace
+    image: dag_3_workspace_image
+    restart: always
+    environment:
+      DAGSTER_CURRENT_IMAGE: "dag_3_workspace_image"
+    networks:
+      - dag_3_network
+
+  # This service runs dagster-webserver, which loads your user code from the user code container.
+  # Since our instance uses the QueuedRunCoordinator, any runs submitted from the webserver will be put on
+  # a queue and later dequeued and launched by dagster-daemon.
+  dag_3_webserver:
+    build:
+      context: .
+      dockerfile: ./Dockerfile_dagster
+    entrypoint:
+      - dagster-webserver
+      - -h
+      - "0.0.0.0"
+      - -p
+      - "3000"
+      - -w
+      - workspace.yaml
+    container_name: dag_3_webserver
+    expose:
+      - "3000"
+    ports:
+      - "3000:3000"
+    environment:
+      DAGSTER_POSTGRES_USER: ${DAGSTER_POSTGRES_USER}
+      DAGSTER_POSTGRES_PASSWORD: ${DAGSTER_POSTGRES_PASSWORD}
+      DAGSTER_POSTGRES_DB: ${DAGSTER_POSTGRES_DB}
+      DAGSTER_POSTGRES_HOSTNAME: ${DAGSTER_POSTGRES_HOSTNAME}
+    volumes: # Make docker client accessible so we can terminate containers from the webserver
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /tmp/io_manager_storage:/tmp/io_manager_storage
+    networks:
+      - dag_3_network
+    depends_on:
+      - dag_3_workspace
+
+  # This service runs the dagster-daemon process, which is responsible for taking runs
+  # off of the queue and launching them, as well as creating runs from schedules or sensors.
+  dag_3_daemon:
+    build:
+      context: .
+      dockerfile: ./Dockerfile_dagster
+    entrypoint:
+      - dagster-daemon
+      - run
+    container_name: dag_3_daemon
+    restart: on-failure
+    environment:
+      DAGSTER_POSTGRES_USER: ${DAGSTER_POSTGRES_USER}
+      DAGSTER_POSTGRES_PASSWORD: ${DAGSTER_POSTGRES_PASSWORD}
+      DAGSTER_POSTGRES_DB: ${DAGSTER_POSTGRES_DB}
+      DAGSTER_POSTGRES_HOSTNAME: ${DAGSTER_POSTGRES_HOSTNAME}
+    volumes: # Make docker client accessible so we can launch containers using host docker
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /tmp/io_manager_storage:/tmp/io_manager_storage
+    networks:
+      - dag_3_network
+    depends_on:
+      - dag_3_workspace
+
+networks:
+  dag_3_network:
+    driver: bridge
+    name: dag_3_network
